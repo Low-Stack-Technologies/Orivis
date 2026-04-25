@@ -1,0 +1,1308 @@
+openapi: 3.1.0
+info:
+  title: Orivis API
+  version: 0.1.0
+  summary: Contract-first API for Orivis SSO platform
+  description: |
+    Orivis provides two primary authentication products:
+
+    1) OAuth2/OIDC provider mode for third-party applications
+    2) Forward-auth decisioning for reverse-proxy integration
+
+    One user can hold multiple sign-in methods, including password, TOTP, passkeys,
+    and linked external OAuth providers.
+servers:
+  - url: https://api.orivis.local
+tags:
+  - name: Auth
+  - name: Identity
+  - name: OAuth2 Provider
+  - name: Forward Auth
+  - name: Admin OAuth2 Policy
+  - name: Admin Forward Auth Policy
+  - name: Admin Audit
+
+paths:
+  /v1/auth/register:
+    post:
+      tags: [Auth]
+      operationId: registerWithPassword
+      summary: Register a local account
+      description: Use this endpoint when a new end user signs up with local credentials for their first Orivis identity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/auth/login/password:
+    post:
+      tags: [Auth]
+      operationId: loginWithPassword
+      summary: Start login using username/email and password
+      description: Use this endpoint when a user begins a password-based login flow and may need an additional challenge step.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLoginRequest'
+      responses:
+        '200':
+          description: Login completed or challenge required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/auth/challenge/totp:
+    post:
+      tags: [Auth]
+      operationId: verifyTotpChallenge
+      summary: Complete a pending TOTP challenge
+      description: Use this endpoint after password verification when the user must submit a TOTP code to finish sign-in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotpChallengeRequest'
+      responses:
+        '200':
+          description: Challenge completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/auth/challenge/webauthn/options:
+    post:
+      tags: [Auth]
+      operationId: getWebAuthnChallengeOptions
+      summary: Get WebAuthn request options for authentication
+      description: Use this endpoint before passkey assertion to fetch challenge data required by the browser WebAuthn API.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnOptionsRequest'
+      responses:
+        '200':
+          description: PublicKeyCredentialRequestOptions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebAuthnRequestOptions'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/auth/challenge/webauthn/verify:
+    post:
+      tags: [Auth]
+      operationId: verifyWebAuthnChallenge
+      summary: Verify WebAuthn assertion
+      description: Use this endpoint after the browser returns a WebAuthn assertion to complete passkey authentication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnVerifyRequest'
+      responses:
+        '200':
+          description: Challenge completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/auth/providers/{provider}/start:
+    post:
+      tags: [Auth]
+      operationId: startExternalProviderLogin
+      summary: Start authentication with an external OAuth provider
+      description: Use this endpoint when the user chooses an external identity provider such as Google for login or linking.
+      parameters:
+        - $ref: '#/components/parameters/ProviderPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalProviderStartRequest'
+      responses:
+        '200':
+          description: Redirect details for provider login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalProviderStartResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/auth/providers/{provider}/callback:
+    post:
+      tags: [Auth]
+      operationId: completeExternalProviderLogin
+      summary: Complete authentication with an external OAuth provider
+      description: Use this endpoint after the provider callback to finish external login and attach identity to an Orivis account.
+      parameters:
+        - $ref: '#/components/parameters/ProviderPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalProviderCallbackRequest'
+      responses:
+        '200':
+          description: Login completed or linked to existing account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/me:
+    get:
+      tags: [Identity]
+      operationId: getCurrentUser
+      summary: Get current authenticated user
+      description: Use this endpoint when the UI or API client needs the active user profile for the current session or token.
+      security:
+        - cookieSession: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/me/methods:
+    get:
+      tags: [Identity]
+      operationId: listCurrentUserAuthMethods
+      summary: List all linked sign-in methods for current user
+      description: Use this endpoint on account security screens to display every authentication method linked to the current user.
+      security:
+        - cookieSession: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Linked methods
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuthMethod'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      tags: [Identity]
+      operationId: linkCurrentUserAuthMethod
+      summary: Link a new sign-in method to current user
+      description: Use this endpoint when an authenticated user adds an extra sign-in factor such as passkey, TOTP, or Google.
+      security:
+        - cookieSession: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkAuthMethodRequest'
+      responses:
+        '201':
+          description: Method linked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMethod'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/me/methods/{methodId}:
+    delete:
+      tags: [Identity]
+      operationId: unlinkCurrentUserAuthMethod
+      summary: Unlink a sign-in method
+      description: Use this endpoint when a user removes a previously linked sign-in method from their account.
+      security:
+        - cookieSession: []
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MethodIdPath'
+      responses:
+        '204':
+          description: Method removed
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /.well-known/openid-configuration:
+    get:
+      tags: [OAuth2 Provider]
+      operationId: getOidcDiscoveryDocument
+      summary: OpenID Connect discovery document
+      description: Use this endpoint when OAuth2/OIDC clients need provider metadata such as issuer and token endpoint URLs.
+      responses:
+        '200':
+          description: Discovery document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OidcDiscovery'
+
+  /oauth2/authorize:
+    get:
+      tags: [OAuth2 Provider]
+      operationId: authorizeOAuth2Client
+      summary: OAuth2 authorization endpoint
+      description: Use this endpoint to start Authorization Code flow by redirecting end users for login and consent.
+      parameters:
+        - $ref: '#/components/parameters/ClientIdQuery'
+        - $ref: '#/components/parameters/RedirectUriQuery'
+        - $ref: '#/components/parameters/ResponseTypeQuery'
+        - $ref: '#/components/parameters/ScopeQuery'
+        - $ref: '#/components/parameters/StateQuery'
+        - $ref: '#/components/parameters/CodeChallengeQuery'
+        - $ref: '#/components/parameters/CodeChallengeMethodQuery'
+      responses:
+        '302':
+          description: Redirect to consent/login or client callback
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /oauth2/token:
+    post:
+      tags: [OAuth2 Provider]
+      operationId: exchangeOAuth2Token
+      summary: OAuth2 token endpoint
+      description: Use this endpoint after authorization or refresh to exchange grants for access, refresh, and ID tokens.
+      security:
+        - clientBasic: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuth2TokenRequest'
+      responses:
+        '200':
+          description: Token response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuth2TokenResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /oauth2/revoke:
+    post:
+      tags: [OAuth2 Provider]
+      operationId: revokeOAuth2Token
+      summary: Revoke access or refresh token
+      description: Use this endpoint when a client or admin needs to invalidate a previously issued access or refresh token.
+      security:
+        - clientBasic: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuth2RevokeRequest'
+      responses:
+        '200':
+          description: Revocation accepted
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /oauth2/introspect:
+    post:
+      tags: [OAuth2 Provider]
+      operationId: introspectOAuth2Token
+      summary: Introspect token activity and metadata
+      description: Use this endpoint for resource servers that must validate token status and retrieve token metadata at runtime.
+      security:
+        - clientBasic: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuth2IntrospectRequest'
+      responses:
+        '200':
+          description: Introspection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuth2IntrospectResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /oauth2/jwks:
+    get:
+      tags: [OAuth2 Provider]
+      operationId: getOAuth2Jwks
+      summary: JSON Web Key Set for token verification
+      description: Use this endpoint when clients or resource servers need public signing keys to verify Orivis-issued JWTs.
+      responses:
+        '200':
+          description: JWKS
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwksDocument'
+
+  /oauth2/userinfo:
+    get:
+      tags: [OAuth2 Provider]
+      operationId: getOAuth2UserInfo
+      summary: OIDC userinfo endpoint
+      description: Use this endpoint after OAuth authentication when a client needs the authenticated subject claims.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User info payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/forward-auth/check:
+    get:
+      tags: [Forward Auth]
+      operationId: checkForwardAuth
+      summary: Evaluate request access for reverse-proxy forward-auth
+      description: Use this endpoint from reverse proxies on each request to decide allow, unauthenticated, or forbidden outcomes.
+      parameters:
+        - in: header
+          name: X-Forwarded-Method
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Forwarded-Host
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Forwarded-Uri
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Forwarded-Proto
+          required: false
+          schema:
+            type: string
+        - in: header
+          name: X-Forwarded-For
+          required: false
+          schema:
+            type: string
+      security:
+        - cookieSession: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Request allowed
+          headers:
+            X-Orivis-Subject:
+              schema:
+                type: string
+            X-Orivis-Email:
+              schema:
+                type: string
+            X-Orivis-Groups:
+              schema:
+                type: string
+            X-Orivis-Decision-Reason:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForwardAuthDecision'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForwardAuthDecision'
+        '403':
+          description: Authenticated but forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForwardAuthDecision'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/admin/policies/oauth2/platforms/{platformId}:
+    get:
+      tags: [Admin OAuth2 Policy]
+      operationId: getOAuth2PlatformPolicy
+      summary: Get OAuth2 policy for a platform
+      description: Use this endpoint in admin tooling to read the current OAuth2 access mode and entries for a platform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlatformIdPath'
+      responses:
+        '200':
+          description: Platform policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPolicy'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    put:
+      tags: [Admin OAuth2 Policy]
+      operationId: putOAuth2PlatformPolicy
+      summary: Upsert OAuth2 policy for a platform
+      description: Use this endpoint when admins create or update OAuth2 platform-level allowlist or denylist rules.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlatformIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformPolicy'
+      responses:
+        '200':
+          description: Policy upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPolicy'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/admin/policies/forward-auth/platforms/{platformId}:
+    get:
+      tags: [Admin Forward Auth Policy]
+      operationId: getForwardAuthPlatformPolicy
+      summary: Get forward-auth policy for a platform
+      description: Use this endpoint in admin tooling to inspect forward-auth platform policy configuration.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlatformIdPath'
+      responses:
+        '200':
+          description: Platform policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPolicy'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    put:
+      tags: [Admin Forward Auth Policy]
+      operationId: putForwardAuthPlatformPolicy
+      summary: Upsert forward-auth policy for a platform
+      description: Use this endpoint when admins create or update forward-auth platform-level allowlist or denylist rules.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlatformIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformPolicy'
+      responses:
+        '200':
+          description: Policy upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPolicy'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/admin/policies/oauth2/users/{userId}/platforms/{platformId}:
+    get:
+      tags: [Admin OAuth2 Policy]
+      operationId: getOAuth2UserPlatformOverride
+      summary: Get OAuth2 policy override for user on platform
+      description: Use this endpoint to inspect whether a user has an explicit OAuth2 allow or deny override for one platform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+        - $ref: '#/components/parameters/PlatformIdPath'
+      responses:
+        '200':
+          description: User policy override
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectPolicyOverride'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    put:
+      tags: [Admin OAuth2 Policy]
+      operationId: putOAuth2UserPlatformOverride
+      summary: Upsert OAuth2 policy override for user on platform
+      description: Use this endpoint when admins set or change a per-user OAuth2 override for a platform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+        - $ref: '#/components/parameters/PlatformIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubjectPolicyOverride'
+      responses:
+        '200':
+          description: Override upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectPolicyOverride'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/admin/policies/oauth2/groups/{groupId}/platforms/{platformId}:
+    get:
+      tags: [Admin OAuth2 Policy]
+      operationId: getOAuth2GroupPlatformOverride
+      summary: Get OAuth2 policy override for group on platform
+      description: Use this endpoint to inspect whether a group has an explicit OAuth2 allow or deny override for one platform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupIdPath'
+        - $ref: '#/components/parameters/PlatformIdPath'
+      responses:
+        '200':
+          description: Group policy override
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectPolicyOverride'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    put:
+      tags: [Admin OAuth2 Policy]
+      operationId: putOAuth2GroupPlatformOverride
+      summary: Upsert OAuth2 policy override for group on platform
+      description: Use this endpoint when admins set or change a per-group OAuth2 override for a platform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupIdPath'
+        - $ref: '#/components/parameters/PlatformIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubjectPolicyOverride'
+      responses:
+        '200':
+          description: Override upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectPolicyOverride'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/admin/policies/forward-auth/users/{userId}/platforms/{platformId}:
+    get:
+      tags: [Admin Forward Auth Policy]
+      operationId: getForwardAuthUserPlatformOverride
+      summary: Get forward-auth policy override for user on platform
+      description: Use this endpoint to inspect whether a user has an explicit forward-auth allow or deny override for one platform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+        - $ref: '#/components/parameters/PlatformIdPath'
+      responses:
+        '200':
+          description: User policy override
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectPolicyOverride'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    put:
+      tags: [Admin Forward Auth Policy]
+      operationId: putForwardAuthUserPlatformOverride
+      summary: Upsert forward-auth policy override for user on platform
+      description: Use this endpoint when admins set or change a per-user forward-auth override for a platform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+        - $ref: '#/components/parameters/PlatformIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubjectPolicyOverride'
+      responses:
+        '200':
+          description: Override upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectPolicyOverride'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/admin/policies/forward-auth/groups/{groupId}/platforms/{platformId}:
+    get:
+      tags: [Admin Forward Auth Policy]
+      operationId: getForwardAuthGroupPlatformOverride
+      summary: Get forward-auth policy override for group on platform
+      description: Use this endpoint to inspect whether a group has an explicit forward-auth allow or deny override for one platform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupIdPath'
+        - $ref: '#/components/parameters/PlatformIdPath'
+      responses:
+        '200':
+          description: Group policy override
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectPolicyOverride'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    put:
+      tags: [Admin Forward Auth Policy]
+      operationId: putForwardAuthGroupPlatformOverride
+      summary: Upsert forward-auth policy override for group on platform
+      description: Use this endpoint when admins set or change a per-group forward-auth override for a platform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupIdPath'
+        - $ref: '#/components/parameters/PlatformIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubjectPolicyOverride'
+      responses:
+        '200':
+          description: Override upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectPolicyOverride'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/admin/audit-events:
+    get:
+      tags: [Admin Audit]
+      operationId: listAuditEvents
+      summary: List audit events
+      description: Use this endpoint for compliance and incident review to paginate administrative and security-relevant events.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: Audit event page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPage'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: orivis_session
+    clientBasic:
+      type: http
+      scheme: basic
+
+  parameters:
+    ProviderPath:
+      in: path
+      name: provider
+      required: true
+      schema:
+        type: string
+        enum: [google]
+    MethodIdPath:
+      in: path
+      name: methodId
+      required: true
+      schema:
+        type: string
+    PlatformIdPath:
+      in: path
+      name: platformId
+      required: true
+      schema:
+        type: string
+    UserIdPath:
+      in: path
+      name: userId
+      required: true
+      schema:
+        type: string
+    GroupIdPath:
+      in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    ClientIdQuery:
+      in: query
+      name: client_id
+      required: true
+      schema:
+        type: string
+    RedirectUriQuery:
+      in: query
+      name: redirect_uri
+      required: true
+      schema:
+        type: string
+        format: uri
+    ResponseTypeQuery:
+      in: query
+      name: response_type
+      required: true
+      schema:
+        type: string
+        enum: [code]
+    ScopeQuery:
+      in: query
+      name: scope
+      required: true
+      schema:
+        type: string
+    StateQuery:
+      in: query
+      name: state
+      required: true
+      schema:
+        type: string
+    CodeChallengeQuery:
+      in: query
+      name: code_challenge
+      required: false
+      schema:
+        type: string
+    CodeChallengeMethodQuery:
+      in: query
+      name: code_challenge_method
+      required: false
+      schema:
+        type: string
+        enum: [S256]
+
+  responses:
+    ErrorResponse:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, username, password]
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+          minLength: 3
+        password:
+          type: string
+          minLength: 12
+
+    PasswordLoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+          description: Email or username
+        password:
+          type: string
+
+    TotpChallengeRequest:
+      type: object
+      required: [challengeId, code]
+      properties:
+        challengeId:
+          type: string
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+
+    WebAuthnOptionsRequest:
+      type: object
+      required: [identifier]
+      properties:
+        identifier:
+          type: string
+
+    WebAuthnRequestOptions:
+      type: object
+      required: [challenge, timeout, rpId, userVerification]
+      properties:
+        challenge:
+          type: string
+        timeout:
+          type: integer
+        rpId:
+          type: string
+        userVerification:
+          type: string
+
+    WebAuthnVerifyRequest:
+      type: object
+      required: [challengeId, credential]
+      properties:
+        challengeId:
+          type: string
+        credential:
+          type: object
+          additionalProperties: true
+
+    ExternalProviderStartRequest:
+      type: object
+      required: [redirectUri]
+      properties:
+        redirectUri:
+          type: string
+          format: uri
+        intent:
+          type: string
+          enum: [login, link]
+          default: login
+
+    ExternalProviderStartResponse:
+      type: object
+      required: [authorizationUrl, state]
+      properties:
+        authorizationUrl:
+          type: string
+          format: uri
+        state:
+          type: string
+
+    ExternalProviderCallbackRequest:
+      type: object
+      required: [code, state]
+      properties:
+        code:
+          type: string
+        state:
+          type: string
+
+    AuthResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [authenticated, challenge_required]
+        session:
+          $ref: '#/components/schemas/Session'
+        requiredChallenge:
+          type: string
+          enum: [totp, webauthn]
+        challengeId:
+          type: string
+
+    User:
+      type: object
+      required: [id, email, username, groups]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        groups:
+          type: array
+          items:
+            type: string
+
+    Session:
+      type: object
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+
+    AuthMethod:
+      type: object
+      required: [id, type, createdAt]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [password, totp, passkey, oauth_google]
+        createdAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    LinkAuthMethodRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [totp, passkey, oauth_google]
+        payload:
+          type: object
+          additionalProperties: true
+
+    OAuth2TokenRequest:
+      type: object
+      required: [grant_type]
+      properties:
+        grant_type:
+          type: string
+          enum: [authorization_code, refresh_token, client_credentials]
+        code:
+          type: string
+        redirect_uri:
+          type: string
+          format: uri
+        code_verifier:
+          type: string
+        refresh_token:
+          type: string
+        scope:
+          type: string
+
+    OAuth2TokenResponse:
+      type: object
+      required: [token_type, access_token, expires_in]
+      properties:
+        token_type:
+          type: string
+          enum: [Bearer]
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+        refresh_token:
+          type: string
+        id_token:
+          type: string
+        scope:
+          type: string
+
+    OAuth2RevokeRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+        token_type_hint:
+          type: string
+          enum: [access_token, refresh_token]
+
+    OAuth2IntrospectRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+        token_type_hint:
+          type: string
+          enum: [access_token, refresh_token]
+
+    OAuth2IntrospectResponse:
+      type: object
+      required: [active]
+      properties:
+        active:
+          type: boolean
+        sub:
+          type: string
+        scope:
+          type: string
+        client_id:
+          type: string
+        exp:
+          type: integer
+        iat:
+          type: integer
+
+    OidcDiscovery:
+      type: object
+      required:
+        - issuer
+        - authorization_endpoint
+        - token_endpoint
+        - userinfo_endpoint
+        - jwks_uri
+      properties:
+        issuer:
+          type: string
+        authorization_endpoint:
+          type: string
+          format: uri
+        token_endpoint:
+          type: string
+          format: uri
+        userinfo_endpoint:
+          type: string
+          format: uri
+        jwks_uri:
+          type: string
+          format: uri
+        response_types_supported:
+          type: array
+          items:
+            type: string
+        subject_types_supported:
+          type: array
+          items:
+            type: string
+        id_token_signing_alg_values_supported:
+          type: array
+          items:
+            type: string
+
+    JwksDocument:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    UserInfo:
+      type: object
+      required: [sub, email]
+      properties:
+        sub:
+          type: string
+        email:
+          type: string
+          format: email
+        email_verified:
+          type: boolean
+        preferred_username:
+          type: string
+        groups:
+          type: array
+          items:
+            type: string
+
+    PlatformPolicy:
+      type: object
+      required: [platformId, mode, entries, updatedAt]
+      properties:
+        platformId:
+          type: string
+        mode:
+          $ref: '#/components/schemas/PolicyMode'
+        entries:
+          type: array
+          items:
+            type: string
+          description: Hostnames or platform identifiers based on integration type
+        updatedAt:
+          type: string
+          format: date-time
+
+    SubjectPolicyOverride:
+      type: object
+      required: [subjectId, subjectType, platformId, decision]
+      properties:
+        subjectId:
+          type: string
+        subjectType:
+          type: string
+          enum: [user, group]
+        platformId:
+          type: string
+        decision:
+          $ref: '#/components/schemas/PolicyDecision'
+        reason:
+          type: string
+
+    PolicyMode:
+      type: string
+      enum: [allow_any, allowlist, denylist]
+
+    PolicyDecision:
+      type: string
+      enum: [allow, deny, inherit]
+
+    ForwardAuthDecision:
+      type: object
+      required: [decision, reasonCode]
+      properties:
+        decision:
+          type: string
+          enum: [allow, deny, unauthenticated]
+        reasonCode:
+          type: string
+          enum:
+            - allowed
+            - missing_session
+            - user_override_deny
+            - user_override_allow
+            - group_override_deny
+            - group_override_allow
+            - platform_denylist
+            - platform_allowlist_missing
+            - tenant_default_deny
+        subject:
+          type: object
+          properties:
+            userId:
+              type: string
+            email:
+              type: string
+              format: email
+            groups:
+              type: array
+              items:
+                type: string
+
+    AuditEvent:
+      type: object
+      required: [id, actorType, actorId, action, createdAt]
+      properties:
+        id:
+          type: string
+        actorType:
+          type: string
+          enum: [admin, system, user]
+        actorId:
+          type: string
+        action:
+          type: string
+        targetType:
+          type: string
+        targetId:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+
+    AuditEventPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

@@ -1,0 +1,5 @@
+development:
+  dialect: postgres
+  datasource: postgresql://postgres:postgres@localhost:5432/orivis?sslmode=disable
+  dir: backend/db/migrations
+  table: migrations
