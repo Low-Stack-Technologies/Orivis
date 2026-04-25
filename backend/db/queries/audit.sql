@@ -15,3 +15,7 @@ SELECT *
 FROM audit_events
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
+
+-- name: CountAuditEvents :one
+SELECT COUNT(*)
+FROM audit_events;

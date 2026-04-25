@@ -6,22 +6,48 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	ConsumeAuthChallenge(ctx context.Context, challengeID string) error
+	ConsumeOAuthAuthorizationCode(ctx context.Context, codeID string) error
+	CountAuditEvents(ctx context.Context) (int64, error)
 	CreateAuditEvent(ctx context.Context, arg CreateAuditEventParams) (AuditEvent, error)
-	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateAuthChallenge(ctx context.Context, arg CreateAuthChallengeParams) (CreateAuthChallengeRow, error)
+	CreateExternalIdentity(ctx context.Context, arg CreateExternalIdentityParams) (CreateExternalIdentityRow, error)
+	CreateOAuthAccessToken(ctx context.Context, arg CreateOAuthAccessTokenParams) (CreateOAuthAccessTokenRow, error)
+	CreateOAuthAuthorizationCode(ctx context.Context, arg CreateOAuthAuthorizationCodeParams) (CreateOAuthAuthorizationCodeRow, error)
+	CreateOAuthClient(ctx context.Context, arg CreateOAuthClientParams) (OauthClient, error)
+	CreateOAuthRefreshToken(ctx context.Context, arg CreateOAuthRefreshTokenParams) (CreateOAuthRefreshTokenRow, error)
+	CreateSession(ctx context.Context, arg CreateSessionParams) (CreateSessionRow, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
+	CreateUserAuthMethod(ctx context.Context, arg CreateUserAuthMethodParams) (CreateUserAuthMethodRow, error)
+	CreateWebAuthnCredential(ctx context.Context, arg CreateWebAuthnCredentialParams) (CreateWebAuthnCredentialRow, error)
+	DeleteSessionByID(ctx context.Context, sessionID string) (int64, error)
+	DeleteUserAuthMethod(ctx context.Context, arg DeleteUserAuthMethodParams) (int64, error)
+	GetAuthChallengeByID(ctx context.Context, challengeID string) (GetAuthChallengeByIDRow, error)
+	GetExternalIdentityByProviderSubject(ctx context.Context, arg GetExternalIdentityByProviderSubjectParams) (GetExternalIdentityByProviderSubjectRow, error)
+	GetOAuthAccessTokenByHash(ctx context.Context, tokenHash string) (GetOAuthAccessTokenByHashRow, error)
+	GetOAuthAuthorizationCodeByHash(ctx context.Context, codeHash string) (GetOAuthAuthorizationCodeByHashRow, error)
+	GetOAuthClientByID(ctx context.Context, clientID string) (OauthClient, error)
+	GetOAuthRefreshTokenByHash(ctx context.Context, tokenHash string) (GetOAuthRefreshTokenByHashRow, error)
 	GetPlatformPolicy(ctx context.Context, arg GetPlatformPolicyParams) (PlatformPolicy, error)
-	GetSubjectPolicyOverride(ctx context.Context, arg GetSubjectPolicyOverrideParams) (SubjectPolicyOverride, error)
-	GetUserByEmail(ctx context.Context, email string) (User, error)
-	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
+	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (GetSessionByRefreshTokenHashRow, error)
+	GetSubjectPolicyOverride(ctx context.Context, arg GetSubjectPolicyOverrideParams) (GetSubjectPolicyOverrideRow, error)
+	GetTotpFactorByUserID(ctx context.Context, userID string) (GetTotpFactorByUserIDRow, error)
+	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
+	GetUserByID(ctx context.Context, userID string) (GetUserByIDRow, error)
+	GetUserByIdentifier(ctx context.Context, identifier string) (GetUserByIdentifierRow, error)
+	GetWebAuthnCredentialByCredentialID(ctx context.Context, credentialID string) (GetWebAuthnCredentialByCredentialIDRow, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
-	ListUserAuthMethods(ctx context.Context, userID pgtype.UUID) ([]UserAuthMethod, error)
-	ListUserGroups(ctx context.Context, userID pgtype.UUID) ([]Group, error)
+	ListUserAuthMethods(ctx context.Context, userID string) ([]ListUserAuthMethodsRow, error)
+	ListUserGroups(ctx context.Context, userID string) ([]ListUserGroupsRow, error)
+	ListWebAuthnCredentialsByUserID(ctx context.Context, userID string) ([]ListWebAuthnCredentialsByUserIDRow, error)
+	RevokeOAuthAccessTokenByHash(ctx context.Context, tokenHash string) error
+	RevokeOAuthRefreshTokenByHash(ctx context.Context, tokenHash string) error
 	UpsertPlatformPolicy(ctx context.Context, arg UpsertPlatformPolicyParams) (PlatformPolicy, error)
-	UpsertSubjectPolicyOverride(ctx context.Context, arg UpsertSubjectPolicyOverrideParams) (SubjectPolicyOverride, error)
+	UpsertSubjectPolicyOverride(ctx context.Context, arg UpsertSubjectPolicyOverrideParams) (UpsertSubjectPolicyOverrideRow, error)
+	UpsertTotpFactor(ctx context.Context, arg UpsertTotpFactorParams) error
 }
 
 var _ Querier = (*Queries)(nil)

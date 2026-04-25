@@ -19,19 +19,79 @@ type AuditEvent struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
+type AuthChallenge struct {
+	ID            string             `json:"id"`
+	ChallengeType string             `json:"challenge_type"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	Data          []byte             `json:"data"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt    pgtype.Timestamptz `json:"consumed_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type ExternalIdentity struct {
+	ID              string             `json:"id"`
+	UserID          string             `json:"user_id"`
+	Provider        string             `json:"provider"`
+	ProviderSubject string             `json:"provider_subject"`
+	Email           pgtype.Text        `json:"email"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type Group struct {
-	ID        pgtype.UUID        `json:"id"`
+	ID        string             `json:"id"`
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type OauthAccessToken struct {
+	ID        string             `json:"id"`
+	TokenHash string             `json:"token_hash"`
+	TokenJti  string             `json:"token_jti"`
+	ClientID  string             `json:"client_id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Scope     string             `json:"scope"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type OauthAuthorizationCode struct {
+	ID                  string             `json:"id"`
+	CodeHash            string             `json:"code_hash"`
+	ClientID            string             `json:"client_id"`
+	UserID              string             `json:"user_id"`
+	RedirectUri         string             `json:"redirect_uri"`
+	Scope               string             `json:"scope"`
+	CodeChallenge       pgtype.Text        `json:"code_challenge"`
+	CodeChallengeMethod pgtype.Text        `json:"code_challenge_method"`
+	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt          pgtype.Timestamptz `json:"consumed_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
 type OauthClient struct {
-	ID           string             `json:"id"`
-	Name         string             `json:"name"`
-	RedirectUris []string           `json:"redirect_uris"`
-	Scopes       []string           `json:"scopes"`
-	Confidential bool               `json:"confidential"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID               string             `json:"id"`
+	Name             string             `json:"name"`
+	RedirectUris     []string           `json:"redirect_uris"`
+	Scopes           []string           `json:"scopes"`
+	Confidential     bool               `json:"confidential"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ClientSecretHash pgtype.Text        `json:"client_secret_hash"`
+	RequirePkce      bool               `json:"require_pkce"`
+}
+
+type OauthRefreshToken struct {
+	ID            string             `json:"id"`
+	TokenHash     string             `json:"token_hash"`
+	AccessTokenID string             `json:"access_token_id"`
+	ClientID      string             `json:"client_id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	Scope         string             `json:"scope"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type PlatformPolicy struct {
@@ -44,26 +104,44 @@ type PlatformPolicy struct {
 }
 
 type Session struct {
-	ID               pgtype.UUID        `json:"id"`
-	UserID           pgtype.UUID        `json:"user_id"`
+	ID               string             `json:"id"`
+	UserID           string             `json:"user_id"`
 	RefreshTokenHash string             `json:"refresh_token_hash"`
 	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type SigningKey struct {
+	ID            string             `json:"id"`
+	Kid           string             `json:"kid"`
+	Algorithm     string             `json:"algorithm"`
+	PrivateKeyPem string             `json:"private_key_pem"`
+	PublicKeyPem  string             `json:"public_key_pem"`
+	Active        bool               `json:"active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type SubjectPolicyOverride struct {
 	ID          int64              `json:"id"`
 	AuthSurface string             `json:"auth_surface"`
 	SubjectType string             `json:"subject_type"`
-	SubjectID   pgtype.UUID        `json:"subject_id"`
+	SubjectID   string             `json:"subject_id"`
 	PlatformID  string             `json:"platform_id"`
 	Decision    string             `json:"decision"`
 	Reason      pgtype.Text        `json:"reason"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type TotpFactor struct {
+	UserID    string             `json:"user_id"`
+	Secret    string             `json:"secret"`
+	Enabled   bool               `json:"enabled"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type User struct {
-	ID           pgtype.UUID        `json:"id"`
+	ID           string             `json:"id"`
 	Email        string             `json:"email"`
 	Username     string             `json:"username"`
 	PasswordHash pgtype.Text        `json:"password_hash"`
@@ -72,8 +150,8 @@ type User struct {
 }
 
 type UserAuthMethod struct {
-	ID              pgtype.UUID        `json:"id"`
-	UserID          pgtype.UUID        `json:"user_id"`
+	ID              string             `json:"id"`
+	UserID          string             `json:"user_id"`
 	MethodType      string             `json:"method_type"`
 	ProviderSubject pgtype.Text        `json:"provider_subject"`
 	SecretRef       pgtype.Text        `json:"secret_ref"`
@@ -82,7 +160,18 @@ type UserAuthMethod struct {
 }
 
 type UserGroup struct {
-	UserID    pgtype.UUID        `json:"user_id"`
-	GroupID   pgtype.UUID        `json:"group_id"`
+	UserID    string             `json:"user_id"`
+	GroupID   string             `json:"group_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type WebauthnCredential struct {
+	ID           string             `json:"id"`
+	UserID       string             `json:"user_id"`
+	CredentialID string             `json:"credential_id"`
+	PublicKey    []byte             `json:"public_key"`
+	SignCount    int64              `json:"sign_count"`
+	Transports   []string           `json:"transports"`
+	Metadata     []byte             `json:"metadata"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }

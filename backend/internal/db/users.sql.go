@@ -14,7 +14,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, username, password_hash)
 VALUES ($1, $2, $3)
-RETURNING id, email, username, password_hash, created_at, updated_at
+RETURNING id::text AS id, email, username, password_hash, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -23,9 +23,18 @@ type CreateUserParams struct {
 	PasswordHash pgtype.Text `json:"password_hash"`
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+type CreateUserRow struct {
+	ID           string             `json:"id"`
+	Email        string             `json:"email"`
+	Username     string             `json:"username"`
+	PasswordHash pgtype.Text        `json:"password_hash"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.Username, arg.PasswordHash)
-	var i User
+	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -37,15 +46,131 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const createUserAuthMethod = `-- name: CreateUserAuthMethod :one
+INSERT INTO user_auth_methods (user_id, method_type, provider_subject, secret_ref, metadata)
+VALUES (
+  $1::uuid,
+  $2,
+  $3,
+  $4,
+  $5
+)
+RETURNING id::text AS id,
+          user_id::text AS user_id,
+          method_type,
+          provider_subject,
+          secret_ref,
+          metadata,
+          created_at
+`
+
+type CreateUserAuthMethodParams struct {
+	UserID          string      `json:"user_id"`
+	MethodType      string      `json:"method_type"`
+	ProviderSubject pgtype.Text `json:"provider_subject"`
+	SecretRef       pgtype.Text `json:"secret_ref"`
+	Metadata        []byte      `json:"metadata"`
+}
+
+type CreateUserAuthMethodRow struct {
+	ID              string             `json:"id"`
+	UserID          string             `json:"user_id"`
+	MethodType      string             `json:"method_type"`
+	ProviderSubject pgtype.Text        `json:"provider_subject"`
+	SecretRef       pgtype.Text        `json:"secret_ref"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateUserAuthMethod(ctx context.Context, arg CreateUserAuthMethodParams) (CreateUserAuthMethodRow, error) {
+	row := q.db.QueryRow(ctx, createUserAuthMethod,
+		arg.UserID,
+		arg.MethodType,
+		arg.ProviderSubject,
+		arg.SecretRef,
+		arg.Metadata,
+	)
+	var i CreateUserAuthMethodRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.MethodType,
+		&i.ProviderSubject,
+		&i.SecretRef,
+		&i.Metadata,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const deleteUserAuthMethod = `-- name: DeleteUserAuthMethod :execrows
+DELETE FROM user_auth_methods
+WHERE id = $1::uuid
+  AND user_id = $2::uuid
+`
+
+type DeleteUserAuthMethodParams struct {
+	MethodID string `json:"method_id"`
+	UserID   string `json:"user_id"`
+}
+
+func (q *Queries) DeleteUserAuthMethod(ctx context.Context, arg DeleteUserAuthMethodParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserAuthMethod, arg.MethodID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getTotpFactorByUserID = `-- name: GetTotpFactorByUserID :one
+SELECT user_id::text AS user_id,
+       secret,
+       enabled,
+       created_at,
+       updated_at
+FROM totp_factors
+WHERE user_id = $1::uuid
+`
+
+type GetTotpFactorByUserIDRow struct {
+	UserID    string             `json:"user_id"`
+	Secret    string             `json:"secret"`
+	Enabled   bool               `json:"enabled"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetTotpFactorByUserID(ctx context.Context, userID string) (GetTotpFactorByUserIDRow, error) {
+	row := q.db.QueryRow(ctx, getTotpFactorByUserID, userID)
+	var i GetTotpFactorByUserIDRow
+	err := row.Scan(
+		&i.UserID,
+		&i.Secret,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, username, password_hash, created_at, updated_at
+SELECT id::text AS id, email, username, password_hash, created_at, updated_at
 FROM users
 WHERE email = $1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+type GetUserByEmailRow struct {
+	ID           string             `json:"id"`
+	Email        string             `json:"email"`
+	Username     string             `json:"username"`
+	PasswordHash pgtype.Text        `json:"password_hash"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
-	var i User
+	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -58,14 +183,52 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, username, password_hash, created_at, updated_at
+SELECT id::text AS id, email, username, password_hash, created_at, updated_at
 FROM users
-WHERE id = $1
+WHERE id = $1::uuid
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByID, id)
-	var i User
+type GetUserByIDRow struct {
+	ID           string             `json:"id"`
+	Email        string             `json:"email"`
+	Username     string             `json:"username"`
+	PasswordHash pgtype.Text        `json:"password_hash"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, userID string) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, userID)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserByIdentifier = `-- name: GetUserByIdentifier :one
+SELECT id::text AS id, email, username, password_hash, created_at, updated_at
+FROM users
+WHERE email = $1 OR username = $1
+`
+
+type GetUserByIdentifierRow struct {
+	ID           string             `json:"id"`
+	Email        string             `json:"email"`
+	Username     string             `json:"username"`
+	PasswordHash pgtype.Text        `json:"password_hash"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByIdentifier(ctx context.Context, identifier string) (GetUserByIdentifierRow, error) {
+	row := q.db.QueryRow(ctx, getUserByIdentifier, identifier)
+	var i GetUserByIdentifierRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -78,21 +241,37 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 }
 
 const listUserAuthMethods = `-- name: ListUserAuthMethods :many
-SELECT id, user_id, method_type, provider_subject, secret_ref, metadata, created_at
+SELECT id::text AS id,
+       user_id::text AS user_id,
+       method_type,
+       provider_subject,
+       secret_ref,
+       metadata,
+       created_at
 FROM user_auth_methods
-WHERE user_id = $1
+WHERE user_id = $1::uuid
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListUserAuthMethods(ctx context.Context, userID pgtype.UUID) ([]UserAuthMethod, error) {
+type ListUserAuthMethodsRow struct {
+	ID              string             `json:"id"`
+	UserID          string             `json:"user_id"`
+	MethodType      string             `json:"method_type"`
+	ProviderSubject pgtype.Text        `json:"provider_subject"`
+	SecretRef       pgtype.Text        `json:"secret_ref"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListUserAuthMethods(ctx context.Context, userID string) ([]ListUserAuthMethodsRow, error) {
 	rows, err := q.db.Query(ctx, listUserAuthMethods, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []UserAuthMethod
+	var items []ListUserAuthMethodsRow
 	for rows.Next() {
-		var i UserAuthMethod
+		var i ListUserAuthMethodsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
@@ -113,22 +292,28 @@ func (q *Queries) ListUserAuthMethods(ctx context.Context, userID pgtype.UUID) (
 }
 
 const listUserGroups = `-- name: ListUserGroups :many
-SELECT g.id, g.name, g.created_at
+SELECT g.id::text AS id, g.name, g.created_at
 FROM groups g
 INNER JOIN user_groups ug ON ug.group_id = g.id
-WHERE ug.user_id = $1
+WHERE ug.user_id = $1::uuid
 ORDER BY g.name ASC
 `
 
-func (q *Queries) ListUserGroups(ctx context.Context, userID pgtype.UUID) ([]Group, error) {
+type ListUserGroupsRow struct {
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListUserGroups(ctx context.Context, userID string) ([]ListUserGroupsRow, error) {
 	rows, err := q.db.Query(ctx, listUserGroups, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Group
+	var items []ListUserGroupsRow
 	for rows.Next() {
-		var i Group
+		var i ListUserGroupsRow
 		if err := rows.Scan(&i.ID, &i.Name, &i.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -138,4 +323,24 @@ func (q *Queries) ListUserGroups(ctx context.Context, userID pgtype.UUID) ([]Gro
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertTotpFactor = `-- name: UpsertTotpFactor :exec
+INSERT INTO totp_factors (user_id, secret, enabled, updated_at)
+VALUES ($1::uuid, $2, $3, NOW())
+ON CONFLICT (user_id) DO UPDATE SET
+  secret = EXCLUDED.secret,
+  enabled = EXCLUDED.enabled,
+  updated_at = NOW()
+`
+
+type UpsertTotpFactorParams struct {
+	UserID  string `json:"user_id"`
+	Secret  string `json:"secret"`
+	Enabled bool   `json:"enabled"`
+}
+
+func (q *Queries) UpsertTotpFactor(ctx context.Context, arg UpsertTotpFactorParams) error {
+	_, err := q.db.Exec(ctx, upsertTotpFactor, arg.UserID, arg.Secret, arg.Enabled)
+	return err
 }

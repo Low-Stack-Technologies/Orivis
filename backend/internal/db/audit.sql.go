@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAuditEvents = `-- name: CountAuditEvents :one
+SELECT COUNT(*)
+FROM audit_events
+`
+
+func (q *Queries) CountAuditEvents(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAuditEvents)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAuditEvent = `-- name: CreateAuditEvent :one
 INSERT INTO audit_events (
   actor_type,

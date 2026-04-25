@@ -12,7 +12,12 @@ import (
 )
 
 const getPlatformPolicy = `-- name: GetPlatformPolicy :one
-SELECT id, auth_surface, platform_id, mode, entries, updated_at
+SELECT id,
+       auth_surface,
+       platform_id,
+       mode,
+       entries,
+       updated_at
 FROM platform_policies
 WHERE auth_surface = $1
   AND platform_id = $2
@@ -38,29 +43,47 @@ func (q *Queries) GetPlatformPolicy(ctx context.Context, arg GetPlatformPolicyPa
 }
 
 const getSubjectPolicyOverride = `-- name: GetSubjectPolicyOverride :one
-SELECT id, auth_surface, subject_type, subject_id, platform_id, decision, reason, updated_at
+SELECT id,
+       auth_surface,
+       subject_type,
+       subject_id::text AS subject_id,
+       platform_id,
+       decision,
+       reason,
+       updated_at
 FROM subject_policy_overrides
 WHERE auth_surface = $1
   AND subject_type = $2
-  AND subject_id = $3
+  AND subject_id = $3::uuid
   AND platform_id = $4
 `
 
 type GetSubjectPolicyOverrideParams struct {
-	AuthSurface string      `json:"auth_surface"`
-	SubjectType string      `json:"subject_type"`
-	SubjectID   pgtype.UUID `json:"subject_id"`
-	PlatformID  string      `json:"platform_id"`
+	AuthSurface string `json:"auth_surface"`
+	SubjectType string `json:"subject_type"`
+	SubjectID   string `json:"subject_id"`
+	PlatformID  string `json:"platform_id"`
 }
 
-func (q *Queries) GetSubjectPolicyOverride(ctx context.Context, arg GetSubjectPolicyOverrideParams) (SubjectPolicyOverride, error) {
+type GetSubjectPolicyOverrideRow struct {
+	ID          int64              `json:"id"`
+	AuthSurface string             `json:"auth_surface"`
+	SubjectType string             `json:"subject_type"`
+	SubjectID   string             `json:"subject_id"`
+	PlatformID  string             `json:"platform_id"`
+	Decision    string             `json:"decision"`
+	Reason      pgtype.Text        `json:"reason"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetSubjectPolicyOverride(ctx context.Context, arg GetSubjectPolicyOverrideParams) (GetSubjectPolicyOverrideRow, error) {
 	row := q.db.QueryRow(ctx, getSubjectPolicyOverride,
 		arg.AuthSurface,
 		arg.SubjectType,
 		arg.SubjectID,
 		arg.PlatformID,
 	)
-	var i SubjectPolicyOverride
+	var i GetSubjectPolicyOverrideRow
 	err := row.Scan(
 		&i.ID,
 		&i.AuthSurface,
@@ -82,7 +105,13 @@ INSERT INTO platform_policies (
   entries,
   updated_at
 )
-VALUES ($1, $2, $3, $4, NOW())
+VALUES (
+  $1,
+  $2,
+  $3,
+  $4,
+  NOW()
+)
 ON CONFLICT (auth_surface, platform_id)
 DO UPDATE SET
   mode = EXCLUDED.mode,
@@ -127,25 +156,51 @@ INSERT INTO subject_policy_overrides (
   reason,
   updated_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, NOW())
+VALUES (
+  $1,
+  $2,
+  $3::uuid,
+  $4,
+  $5,
+  $6,
+  NOW()
+)
 ON CONFLICT (auth_surface, subject_type, subject_id, platform_id)
 DO UPDATE SET
   decision = EXCLUDED.decision,
   reason = EXCLUDED.reason,
   updated_at = NOW()
-RETURNING id, auth_surface, subject_type, subject_id, platform_id, decision, reason, updated_at
+RETURNING id,
+          auth_surface,
+          subject_type,
+          subject_id::text AS subject_id,
+          platform_id,
+          decision,
+          reason,
+          updated_at
 `
 
 type UpsertSubjectPolicyOverrideParams struct {
 	AuthSurface string      `json:"auth_surface"`
 	SubjectType string      `json:"subject_type"`
-	SubjectID   pgtype.UUID `json:"subject_id"`
+	SubjectID   string      `json:"subject_id"`
 	PlatformID  string      `json:"platform_id"`
 	Decision    string      `json:"decision"`
 	Reason      pgtype.Text `json:"reason"`
 }
 
-func (q *Queries) UpsertSubjectPolicyOverride(ctx context.Context, arg UpsertSubjectPolicyOverrideParams) (SubjectPolicyOverride, error) {
+type UpsertSubjectPolicyOverrideRow struct {
+	ID          int64              `json:"id"`
+	AuthSurface string             `json:"auth_surface"`
+	SubjectType string             `json:"subject_type"`
+	SubjectID   string             `json:"subject_id"`
+	PlatformID  string             `json:"platform_id"`
+	Decision    string             `json:"decision"`
+	Reason      pgtype.Text        `json:"reason"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpsertSubjectPolicyOverride(ctx context.Context, arg UpsertSubjectPolicyOverrideParams) (UpsertSubjectPolicyOverrideRow, error) {
 	row := q.db.QueryRow(ctx, upsertSubjectPolicyOverride,
 		arg.AuthSurface,
 		arg.SubjectType,
@@ -154,7 +209,7 @@ func (q *Queries) UpsertSubjectPolicyOverride(ctx context.Context, arg UpsertSub
 		arg.Decision,
 		arg.Reason,
 	)
-	var i SubjectPolicyOverride
+	var i UpsertSubjectPolicyOverrideRow
 	err := row.Scan(
 		&i.ID,
 		&i.AuthSurface,
