@@ -84,7 +84,7 @@ build-backend:
 	cd backend && go test ./...
 
 dev:
-	@bash -c 'set -euo pipefail; trap "kill 0" EXIT; (cd backend && go run ./cmd/api) & npm --prefix frontend run dev'
+	@bash -c 'set -euo pipefail; backend_pid=""; cleanup() { if [ -n "$$backend_pid" ] && kill -0 "$$backend_pid" 2>/dev/null; then kill -TERM "$$backend_pid" 2>/dev/null || true; wait "$$backend_pid" 2>/dev/null || true; fi; }; trap cleanup EXIT INT TERM; (cd backend && go run ./cmd/api) & backend_pid=$$!; npm --prefix frontend run dev'
 
 dev-frontend:
 	npm --prefix frontend run dev

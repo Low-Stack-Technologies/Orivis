@@ -41,6 +41,18 @@ make db-status
 go run ./cmd/api
 ```
 
+Recommended project commands:
+
+```bash
+make dev-backend
+make dev
+```
+
+- API listens on `http://localhost:8080`
+- Health endpoint: `http://localhost:8080/healthz`
+
+See `docs/development-workflow.md` for the full local development runbook.
+
 ## Next Implementation Steps
 
 1. Generate API types and chi handlers.

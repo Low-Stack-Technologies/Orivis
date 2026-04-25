@@ -40,6 +40,59 @@ make build
 
 Tool installation guidance is documented in `docs/tooling.md`.
 
+## Local Development
+
+### 1) First-time setup
+
+```bash
+make doctor
+make install
+make generate
+```
+
+### 2) Start local PostgreSQL and apply migrations
+
+```bash
+make db-start
+make db-up
+make db-status
+```
+
+### 3) Run backend + frontend together
+
+```bash
+make dev
+```
+
+- Frontend app: `http://localhost:5173`
+- Backend API: `http://localhost:8080`
+- Health check: `http://localhost:8080/healthz`
+
+During development, Vite proxies all API calls from `/v1/*` to `http://localhost:8080/v1/*`.
+
+### 4) Run services separately (optional)
+
+```bash
+# Terminal 1
+make dev-backend
+
+# Terminal 2
+make dev-frontend
+```
+
+### 5) Daily validation commands
+
+```bash
+make lint
+make test
+make build
+```
+
+### 6) Stop services
+
+- Press `Ctrl+C` in the terminal running `make dev`, `make dev-backend`, or `make dev-frontend`.
+- Stop database container when done: `make db-stop`
+
 ## Local PostgreSQL
 
 ```bash

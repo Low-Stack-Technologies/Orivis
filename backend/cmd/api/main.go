@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/Low-Stack-Technologies/Orivis/backend/internal/apigen"
 	"github.com/Low-Stack-Technologies/Orivis/backend/internal/server"
@@ -36,8 +38,24 @@ func main() {
 	})
 
 	addr := ":8080"
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: r,
+	}
+
+	go func() {
+		<-ctx.Done()
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("http shutdown error: %v", err)
+		}
+	}()
+
 	log.Printf("orivis api listening on %s", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 }

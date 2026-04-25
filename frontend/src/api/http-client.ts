@@ -1,3 +1,5 @@
+import { getAccessToken } from '../auth/session'
+
 export async function customFetch<T>(config: {
   url: string
   method: string
@@ -7,6 +9,7 @@ export async function customFetch<T>(config: {
   signal?: AbortSignal
 }): Promise<T> {
   const url = new URL(config.url, window.location.origin)
+  const accessToken = getAccessToken()
 
   if (config.params) {
     for (const [key, value] of Object.entries(config.params)) {
@@ -26,6 +29,7 @@ export async function customFetch<T>(config: {
     signal: config.signal,
     headers: {
       'Content-Type': bodyIsForm ? 'application/x-www-form-urlencoded' : 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(config.headers || {})
     },
     credentials: 'include',
@@ -37,7 +41,18 @@ export async function customFetch<T>(config: {
   })
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`)
+    let message = `Request failed with status ${response.status}`
+
+    try {
+      const errorPayload = (await response.json()) as { message?: string }
+      if (errorPayload?.message) {
+        message = errorPayload.message
+      }
+    } catch {
+      // ignore parse failures and keep fallback message
+    }
+
+    throw new Error(message)
   }
 
   if (response.status === 204) {

@@ -20,6 +20,16 @@ npm --prefix frontend install
 npm --prefix frontend run dev
 ```
 
+For full-stack local development, use the root command:
+
+```bash
+make dev
+```
+
+See `docs/development-workflow.md` for the complete setup/runbook.
+
+During local development, Vite proxies all `/v1/*` API requests to `http://localhost:8080/v1/*`.
+
 ## API Code Generation
 
 Use `frontend/orval.config.ts` with the root OpenAPI contract.
