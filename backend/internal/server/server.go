@@ -465,12 +465,17 @@ func (s *Server) LinkCurrentUserAuthMethod(w http.ResponseWriter, r *http.Reques
 
 	switch req.Type {
 	case apigen.LinkAuthMethodRequestTypeTotp:
-		secret, err := totp.GenerateCodeCustom("JBSWY3DPEHPK3PXP", time.Now(), totp.ValidateOpts{Period: 30, Digits: 6, Skew: 1})
+		key, err := totp.Generate(totp.GenerateOpts{
+			Issuer:      "Orivis",
+			AccountName: p.Email,
+		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "totp_setup_failed", err.Error())
 			return
 		}
+		secret := key.Secret()
 		metadata["secret"] = secret
+		metadata["otpauthUrl"] = key.URL()
 		if err := s.queries.UpsertTotpFactor(r.Context(), db.UpsertTotpFactorParams{UserID: p.UserID, Secret: secret, Enabled: true}); err != nil {
 			writeError(w, http.StatusInternalServerError, "totp_setup_failed", err.Error())
 			return
